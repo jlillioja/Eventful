@@ -1,3 +1,7 @@
 <resources>
     <string name="app_name">Eventful</string>
+    <string name="appwidget_text">Quick Add</string>
+    <string name="add_widget">Add widget</string>
+    <string name="quick_add_event">Quick Add Event</string>
+    <string name="no_play_services">This app requires Google Play Services. Please install Google Play Services on your device and relaunch this app.</string>
 </resources>
