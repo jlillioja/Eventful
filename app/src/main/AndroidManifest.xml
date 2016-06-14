@@ -13,8 +13,8 @@
         android:supportsRtl="true"
         android:theme="@style/AppTheme">
         <activity
-            android:name=".Main"
-            android:theme="@android:style/Theme.Dialog">
+            android:name=".MainActivity"
+            android:theme="@android:style/Theme.Material.Dialog">
             <intent-filter>
                 <action android:name="android.intent.action.MAIN" />
 

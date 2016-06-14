@@ -17,10 +17,9 @@ public class QuickAdd extends AppWidgetProvider {
 
         CharSequence widgetText = context.getString(R.string.appwidget_text);
 
-        // Create an intent to start the QuickAddDiolog activity
-        Intent intent = new Intent(context, Main.class);
+        // Create an intent to start MainActivity
+        Intent intent = new Intent(context, MainActivity.class);
         PendingIntent pendingIntent = PendingIntent.getActivity(context, 0, intent, 0);
-
 
         // Construct the RemoteViews object
         RemoteViews views = new RemoteViews(context.getPackageName(), R.layout.quick_add);

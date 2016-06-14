@@ -2,8 +2,12 @@ package io.github.jlillioja.eventful;
 
 import com.google.android.gms.common.ConnectionResult;
 import com.google.android.gms.common.GoogleApiAvailability;
+import com.google.api.client.extensions.android.http.AndroidHttp;
 import com.google.api.client.googleapis.extensions.android.gms.auth.GoogleAccountCredential;
 
+import com.google.api.client.http.HttpTransport;
+import com.google.api.client.json.JsonFactory;
+import com.google.api.client.json.jackson2.JacksonFactory;
 import com.google.api.client.util.ExponentialBackOff;
 
 import com.google.api.services.calendar.CalendarScopes;
@@ -18,30 +22,31 @@ import android.content.Intent;
 import android.content.SharedPreferences;
 import android.net.ConnectivityManager;
 import android.net.NetworkInfo;
+import android.os.AsyncTask;
 import android.os.Bundle;
 import android.support.annotation.NonNull;
-import android.text.method.ScrollingMovementMethod;
+import android.util.Log;
 import android.view.View;
-import android.view.ViewGroup;
 import android.widget.Button;
 import android.widget.EditText;
-import android.widget.LinearLayout;
-import android.widget.TextView;
 
+import java.io.IOException;
 import java.util.Arrays;
 import java.util.List;
 
+import butterknife.ButterKnife;
+import butterknife.InjectView;
 import pub.devrel.easypermissions.AfterPermissionGranted;
 import pub.devrel.easypermissions.EasyPermissions;
 
-public class Main extends Activity implements EasyPermissions.PermissionCallbacks {
+public class MainActivity extends Activity implements EasyPermissions.PermissionCallbacks {
 
     GoogleAccountCredential mCredential;
-    private TextView mOutputText;
-    private String mEventString = "";
-    private Button mQuickAddButton;
+
     ProgressDialog mProgress;
-    private EditText mInputText;
+    @InjectView(R.id.addButton) protected Button mQuickAddButton;
+    @InjectView(R.id.inputText) protected EditText mInputText;
+
 
     static final int REQUEST_ACCOUNT_PICKER = 1000;
     static final int REQUEST_AUTHORIZATION = 1001;
@@ -59,55 +64,26 @@ public class Main extends Activity implements EasyPermissions.PermissionCallback
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
-        LinearLayout activityLayout = new LinearLayout(this);
-        LinearLayout.LayoutParams lp = new LinearLayout.LayoutParams(
-                LinearLayout.LayoutParams.WRAP_CONTENT,
-                LinearLayout.LayoutParams.WRAP_CONTENT);
-        activityLayout.setLayoutParams(lp);
-        activityLayout.setOrientation(LinearLayout.VERTICAL);
-        activityLayout.setPadding(16, 16, 16, 16);
-
-        ViewGroup.LayoutParams tlp = new ViewGroup.LayoutParams(
-                ViewGroup.LayoutParams.WRAP_CONTENT,
-                ViewGroup.LayoutParams.WRAP_CONTENT);
-
-
-        mInputText = new EditText(this);
-        mInputText.setHint(getString(R.string.quick_add_event));
-        activityLayout.addView(mInputText);
-
-        mQuickAddButton = new Button(this);
-        mQuickAddButton.setText(getString(R.string.appwidget_text));
-        mQuickAddButton.setOnClickListener(new View.OnClickListener() {
-            @Override
-            public void onClick(View v) {
-                mQuickAddButton.setEnabled(false);
-                mOutputText.setText("");
-                mEventString = mInputText.getText().toString();
-                addEvent();
-                mQuickAddButton.setEnabled(true);
-            }
-        });
-        activityLayout.addView(mQuickAddButton);
-
-        mOutputText = new TextView(this);
-        mOutputText.setLayoutParams(tlp);
-        mOutputText.setPadding(16, 16, 16, 16);
-        mOutputText.setVerticalScrollBarEnabled(true);
-        mOutputText.setMovementMethod(new ScrollingMovementMethod());
-        activityLayout.addView(mOutputText);
+        setContentView(R.layout.activity_main);
+        ButterKnife.inject(this);
 
         mProgress = new ProgressDialog(this);
-        mProgress.setMessage("Calling Google Calendar API ...");
-
-        setContentView(activityLayout);
+        mProgress.setMessage("Talking to Google...");
 
         // Initialize credentials and service object.
         mCredential = getCredential(getApplicationContext());
+
+    }
+
+    public void addButtonClick(View view) {
+        mQuickAddButton.setEnabled(false);
+        addEvent(mInputText.getText().toString());
+        mQuickAddButton.setEnabled(true);
     }
 
     public static GoogleAccountCredential getCredential(Context context) {
-        return GoogleAccountCredential.usingOAuth2(context, Arrays.asList(SCOPES))
+        return GoogleAccountCredential
+                .usingOAuth2(context, Arrays.asList(SCOPES))
                 .setBackOff(new ExponentialBackOff());
     }
 
@@ -119,8 +95,8 @@ public class Main extends Activity implements EasyPermissions.PermissionCallback
      * of the preconditions are not satisfied, the app will prompt the user as
      * appropriate.
      */
-    public void addEvent() {
-        if (getAccess()) new AddEventTask(mCredential, mEventString, mOutputText).execute();
+    public void addEvent(String eventString) {
+        if (getAccess()) new AddEventTask(mCredential, eventString).execute();
     }
 
     public boolean getAccess() {
@@ -134,7 +110,7 @@ public class Main extends Activity implements EasyPermissions.PermissionCallback
             result = true;
         }
         if (!isDeviceOnline()) {
-            mOutputText.setText("No network connection available.");
+            //mOutputText.setText("No network connection available.");
             result = false;
         }
         return result;
@@ -158,7 +134,6 @@ public class Main extends Activity implements EasyPermissions.PermissionCallback
                     .getString(PREF_ACCOUNT_NAME, null);
             if (accountName != null) {
                 mCredential.setSelectedAccountName(accountName);
-                addEvent();
             } else {
                 // Start a dialog from which the user can choose an account
                 startActivityForResult(
@@ -187,15 +162,12 @@ public class Main extends Activity implements EasyPermissions.PermissionCallback
      *                    activity result.
      */
     @Override
-    protected void onActivityResult(
-            int requestCode, int resultCode, Intent data) {
+    protected void onActivityResult(int requestCode, int resultCode, Intent data) {
         super.onActivityResult(requestCode, resultCode, data);
         switch (requestCode) {
             case REQUEST_GOOGLE_PLAY_SERVICES:
                 if (resultCode != RESULT_OK) {
-                    mOutputText.setText(R.string.no_play_services);
                 } else {
-                    addEvent();
                 }
                 break;
             case REQUEST_ACCOUNT_PICKER:
@@ -207,13 +179,11 @@ public class Main extends Activity implements EasyPermissions.PermissionCallback
                         editor.putString(PREF_ACCOUNT_NAME, accountName);
                         editor.apply();
                         mCredential.setSelectedAccountName(accountName);
-                        addEvent();
                     }
                 }
                 break;
             case REQUEST_AUTHORIZATION:
                 if (resultCode == RESULT_OK) {
-                    addEvent();
                 }
                 break;
         }
@@ -315,10 +285,94 @@ public class Main extends Activity implements EasyPermissions.PermissionCallback
             final int connectionStatusCode) {
         GoogleApiAvailability apiAvailability = GoogleApiAvailability.getInstance();
         Dialog dialog = apiAvailability.getErrorDialog(
-                Main.this,
+                MainActivity.this,
                 connectionStatusCode,
                 REQUEST_GOOGLE_PLAY_SERVICES);
         dialog.show();
     }
 
+
+    /**
+     * An asynchronous task that handles the Google Calendar API call.
+     * Placing the API calls in their own task ensures the UI stays responsive.
+     */
+    public class AddEventTask extends AsyncTask<Void, Void, String> {
+        private static final String LOG_TAG = "AddEventTask";
+        private com.google.api.services.calendar.Calendar mService = null;
+        private String eventString;
+
+        public AddEventTask(GoogleAccountCredential credential, String event) {
+            HttpTransport transport = AndroidHttp.newCompatibleTransport();
+            JsonFactory jsonFactory = JacksonFactory.getDefaultInstance();
+            mService = new com.google.api.services.calendar.Calendar.Builder(
+                    transport, jsonFactory, credential)
+                    .setApplicationName("Eventful")
+                    .build();
+            this.eventString = event;
+        }
+
+        /**
+         * Background task to call Google Calendar API.
+         *
+         * @param params no parameters needed for this task.
+         */
+        @Override
+        protected String doInBackground(Void... params) {
+            try {
+                return addEvent();
+            } catch (Exception e) {
+                cancel(true);
+                return null;
+            }
+        }
+
+        private String addEvent() throws IOException {
+            Log.d(LOG_TAG, "Entered addEvent\n");
+            String prettyString = mService.events().quickAdd("primary", eventString).execute().toPrettyString();
+            Log.d(LOG_TAG, prettyString);
+            return prettyString;
+        }
+
+        /**
+         * Fetch a list of the next 10 events from the primary calendar.
+         *
+         * @return List of Strings describing returned events.
+         * @throws IOException
+         *//*
+        private List<String> getDataFromApi() throws IOException {
+            // List the next 10 events from the primary calendar.
+            DateTime now = new DateTime(System.currentTimeMillis());
+            List<String> eventStrings = new ArrayList<String>();
+            Events events = mService.events().list("primary")
+                    .setMaxResults(10)
+                    .setTimeMin(now)
+                    .setOrderBy("startTime")
+                    .setSingleEvents(true)
+                    .execute();
+            List<Event> items = events.getItems();
+
+            for (Event event : items) {
+                DateTime start = event.getStart().getDateTime();
+                if (start == null) {
+                    // All-day events don't have start times, so just use
+                    // the start date.
+                    start = event.getStart().getDate();
+                }
+                eventStrings.add(
+                        String.format("%s (%s)", event.getSummary(), start));
+            }
+            return eventStrings;
+        }*/
+
+
+        @Override
+        protected void onPreExecute() {
+            mProgress.show();
+        }
+
+        @Override
+        protected void onPostExecute(String output) {
+            mProgress.dismiss();
+        }
+    }
 }

@@ -6,7 +6,7 @@ android {
 
     defaultConfig {
         applicationId "io.github.jlillioja.eventful"
-        minSdkVersion 15
+        minSdkVersion 21
         targetSdkVersion 23
         versionCode 1
         versionName "1.0"
@@ -15,6 +15,9 @@ android {
         release {
             minifyEnabled false
             proguardFiles getDefaultProguardFile('proguard-android.txt'), 'proguard-rules.pro'
+        }
+        debug {
+            debuggable true
         }
     }
 }
@@ -33,5 +36,6 @@ dependencies {
     compile('com.google.apis:google-api-services-calendar:v3-rev191-1.22.0') {
         exclude group: 'org.apache.httpcomponents'
     }
+    compile 'com.jakewharton:butterknife:6.1.0'
 
 }
