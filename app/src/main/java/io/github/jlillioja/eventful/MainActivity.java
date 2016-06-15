@@ -10,9 +10,10 @@ import com.google.api.client.json.JsonFactory;
 import com.google.api.client.json.jackson2.JacksonFactory;
 import com.google.api.client.util.ExponentialBackOff;
 
+import com.google.api.services.calendar.Calendar;
 import com.google.api.services.calendar.CalendarScopes;
+import com.google.api.services.calendar.model.Event;
 
-import android.Manifest;
 import android.accounts.AccountManager;
 import android.app.Activity;
 import android.app.Dialog;
@@ -24,7 +25,6 @@ import android.net.ConnectivityManager;
 import android.net.NetworkInfo;
 import android.os.AsyncTask;
 import android.os.Bundle;
-import android.support.annotation.NonNull;
 import android.util.Log;
 import android.view.View;
 import android.widget.Button;
@@ -32,20 +32,20 @@ import android.widget.EditText;
 
 import java.io.IOException;
 import java.util.Arrays;
-import java.util.List;
 
 import butterknife.ButterKnife;
 import butterknife.InjectView;
-import pub.devrel.easypermissions.AfterPermissionGranted;
-import pub.devrel.easypermissions.EasyPermissions;
 
-public class MainActivity extends Activity implements EasyPermissions.PermissionCallbacks {
+public class MainActivity extends Activity {
 
+    private static final String LOG_TAG = "Eventful";
     GoogleAccountCredential mCredential;
 
     ProgressDialog mProgress;
-    @InjectView(R.id.addButton) protected Button mQuickAddButton;
-    @InjectView(R.id.inputText) protected EditText mInputText;
+    @InjectView(R.id.addButton)
+    protected Button mQuickAddButton;
+    @InjectView(R.id.inputText)
+    protected EditText mInputText;
 
 
     static final int REQUEST_ACCOUNT_PICKER = 1000;
@@ -72,10 +72,12 @@ public class MainActivity extends Activity implements EasyPermissions.Permission
 
         // Initialize credentials and service object.
         mCredential = getCredential(getApplicationContext());
-
+        if (mCredential.getSelectedAccountName() != null) {
+            Log.d(LOG_TAG, mCredential.getSelectedAccountName());
+        }
     }
 
-    public void addButtonClick(View view) {
+    public void addButtonOnClick(View view) {
         mQuickAddButton.setEnabled(false);
         addEvent(mInputText.getText().toString());
         mQuickAddButton.setEnabled(true);
@@ -119,34 +121,17 @@ public class MainActivity extends Activity implements EasyPermissions.Permission
     /**
      * Attempts to set the account used with the API credentials. If an account
      * name was previously saved it will use that one; otherwise an account
-     * picker dialog will be shown to the user. Note that the setting the
-     * account to use with the credentials object requires the app to have the
-     * GET_ACCOUNTS permission, which is requested here if it is not already
-     * present. The AfterPermissionGranted annotation indicates that this
-     * function will be rerun automatically whenever the GET_ACCOUNTS permission
-     * is granted.
+     * picker dialog will be shown to the user.
      */
-    @AfterPermissionGranted(REQUEST_PERMISSION_GET_ACCOUNTS)
     private void chooseAccount() {
-        if (EasyPermissions.hasPermissions(
-                this, Manifest.permission.GET_ACCOUNTS)) {
-            String accountName = getPreferences(Context.MODE_PRIVATE)
-                    .getString(PREF_ACCOUNT_NAME, null);
-            if (accountName != null) {
-                mCredential.setSelectedAccountName(accountName);
-            } else {
-                // Start a dialog from which the user can choose an account
-                startActivityForResult(
-                        mCredential.newChooseAccountIntent(),
-                        REQUEST_ACCOUNT_PICKER);
-            }
+        String accountName = getPreferences(Context.MODE_PRIVATE).getString(PREF_ACCOUNT_NAME, null);
+        if (accountName != null) {
+            mCredential.setSelectedAccountName(accountName);
         } else {
-            // Request the GET_ACCOUNTS permission via a user dialog
-            EasyPermissions.requestPermissions(
-                    this,
-                    "This app needs to access your Google account (via Contacts).",
-                    REQUEST_PERMISSION_GET_ACCOUNTS,
-                    Manifest.permission.GET_ACCOUNTS);
+            // Start a dialog from which the user can choose an account
+            startActivityForResult(
+                    mCredential.newChooseAccountIntent(),
+                    REQUEST_ACCOUNT_PICKER);
         }
     }
 
@@ -190,50 +175,6 @@ public class MainActivity extends Activity implements EasyPermissions.Permission
     }
 
     /**
-     * Respond to requests for permissions at runtime for API 23 and above.
-     *
-     * @param requestCode  The request code passed in
-     *                     requestPermissions(android.app.Activity, String, int, String[])
-     * @param permissions  The requested permissions. Never null.
-     * @param grantResults The grant results for the corresponding permissions
-     *                     which is either PERMISSION_GRANTED or PERMISSION_DENIED. Never null.
-     */
-    @Override
-    public void onRequestPermissionsResult(int requestCode,
-                                           @NonNull String[] permissions,
-                                           @NonNull int[] grantResults) {
-        super.onRequestPermissionsResult(requestCode, permissions, grantResults);
-        EasyPermissions.onRequestPermissionsResult(
-                requestCode, permissions, grantResults, this);
-    }
-
-    /**
-     * Callback for when a permission is granted using the EasyPermissions
-     * library.
-     *
-     * @param requestCode The request code associated with the requested
-     *                    permission
-     * @param list        The requested permission list. Never null.
-     */
-    @Override
-    public void onPermissionsGranted(int requestCode, List<String> list) {
-        // Do nothing.
-    }
-
-    /**
-     * Callback for when a permission is denied using the EasyPermissions
-     * library.
-     *
-     * @param requestCode The request code associated with the requested
-     *                    permission
-     * @param list        The requested permission list. Never null.
-     */
-    @Override
-    public void onPermissionsDenied(int requestCode, List<String> list) {
-        // Do nothing.
-    }
-
-    /**
      * Checks whether the device currently has a network connection.
      *
      * @return true if the device has a network connection, false otherwise.
@@ -252,10 +193,8 @@ public class MainActivity extends Activity implements EasyPermissions.Permission
      * date on this device; false otherwise.
      */
     private boolean isGooglePlayServicesAvailable() {
-        GoogleApiAvailability apiAvailability =
-                GoogleApiAvailability.getInstance();
-        final int connectionStatusCode =
-                apiAvailability.isGooglePlayServicesAvailable(this);
+        GoogleApiAvailability apiAvailability = GoogleApiAvailability.getInstance();
+        final int connectionStatusCode = apiAvailability.isGooglePlayServicesAvailable(this);
         return connectionStatusCode == ConnectionResult.SUCCESS;
     }
 
@@ -263,16 +202,15 @@ public class MainActivity extends Activity implements EasyPermissions.Permission
      * Attempt to resolve a missing, out-of-date, invalid or disabled Google
      * Play Services installation via a user dialog, if possible.
      */
-    private void acquireGooglePlayServices() {
-        GoogleApiAvailability apiAvailability =
-                GoogleApiAvailability.getInstance();
-        final int connectionStatusCode =
-                apiAvailability.isGooglePlayServicesAvailable(this);
+    private boolean acquireGooglePlayServices() {
+        GoogleApiAvailability apiAvailability = GoogleApiAvailability.getInstance();
+        final int connectionStatusCode = apiAvailability.isGooglePlayServicesAvailable(this);
         if (apiAvailability.isUserResolvableError(connectionStatusCode)) {
             showGooglePlayServicesAvailabilityErrorDialog(connectionStatusCode);
+            return true;
         }
+        return false;
     }
-
 
     /**
      * Display an error dialog showing that Google Play Services is missing
@@ -281,8 +219,7 @@ public class MainActivity extends Activity implements EasyPermissions.Permission
      * @param connectionStatusCode code describing the presence (or lack of)
      *                             Google Play Services on this device.
      */
-    void showGooglePlayServicesAvailabilityErrorDialog(
-            final int connectionStatusCode) {
+    void showGooglePlayServicesAvailabilityErrorDialog(final int connectionStatusCode) {
         GoogleApiAvailability apiAvailability = GoogleApiAvailability.getInstance();
         Dialog dialog = apiAvailability.getErrorDialog(
                 MainActivity.this,
@@ -309,6 +246,7 @@ public class MainActivity extends Activity implements EasyPermissions.Permission
                     .setApplicationName("Eventful")
                     .build();
             this.eventString = event;
+            Log.d(LOG_TAG, "Account name: "+credential.getSelectedAccountName());
         }
 
         /**
@@ -328,42 +266,14 @@ public class MainActivity extends Activity implements EasyPermissions.Permission
 
         private String addEvent() throws IOException {
             Log.d(LOG_TAG, "Entered addEvent\n");
-            String prettyString = mService.events().quickAdd("primary", eventString).execute().toPrettyString();
+            Calendar.Events events = mService.events();
+            Calendar.Events.QuickAdd quickAdd = events.quickAdd("primary", eventString);
+            Event something = quickAdd.execute();
+            Log.d(LOG_TAG, "Executed quick add\n");
+            String prettyString = something.toPrettyString();
             Log.d(LOG_TAG, prettyString);
             return prettyString;
         }
-
-        /**
-         * Fetch a list of the next 10 events from the primary calendar.
-         *
-         * @return List of Strings describing returned events.
-         * @throws IOException
-         *//*
-        private List<String> getDataFromApi() throws IOException {
-            // List the next 10 events from the primary calendar.
-            DateTime now = new DateTime(System.currentTimeMillis());
-            List<String> eventStrings = new ArrayList<String>();
-            Events events = mService.events().list("primary")
-                    .setMaxResults(10)
-                    .setTimeMin(now)
-                    .setOrderBy("startTime")
-                    .setSingleEvents(true)
-                    .execute();
-            List<Event> items = events.getItems();
-
-            for (Event event : items) {
-                DateTime start = event.getStart().getDateTime();
-                if (start == null) {
-                    // All-day events don't have start times, so just use
-                    // the start date.
-                    start = event.getStart().getDate();
-                }
-                eventStrings.add(
-                        String.format("%s (%s)", event.getSummary(), start));
-            }
-            return eventStrings;
-        }*/
-
 
         @Override
         protected void onPreExecute() {

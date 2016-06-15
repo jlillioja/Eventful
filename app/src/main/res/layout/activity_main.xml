@@ -23,6 +23,6 @@
         android:layout_height="wrap_content"
         android:text="@string/appwidget_text"
         android:id="@+id/addButton"
-        android:onClick="addButtonClick"
+        android:onClick="addButtonOnClick"
         android:gravity="center" />
 </LinearLayout>
